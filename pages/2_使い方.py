@@ -1,6 +1,9 @@
 # pages/1_使い方.py
 import streamlit as st
 
+import style
+style.load_css()
+
 st.set_page_config(page_title="使い方")
 st.title("📘 使い方ガイド")
 

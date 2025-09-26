@@ -1,5 +1,8 @@
 import streamlit as st
 
+import style
+style.load_css()
+
 st.set_page_config(page_title="案内")
 
 with st.sidebar:

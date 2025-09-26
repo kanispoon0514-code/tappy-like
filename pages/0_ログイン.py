@@ -1,6 +1,9 @@
 import streamlit as st
 from auth_db import init_user_db, create_user, verify_login, admin_exists
 
+import style
+style.load_css()
+
 st.set_page_config(page_title="ログイン", layout="centered")
 st.title("🔐 ログイン")
 

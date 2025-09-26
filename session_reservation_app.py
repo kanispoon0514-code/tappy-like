@@ -1,6 +1,7 @@
 # session_reservation_app.py
 import streamlit as st
-
+import style
+style.load_css()
 st.set_page_config(page_title="予約システム", layout="wide")
 
 with st.sidebar:

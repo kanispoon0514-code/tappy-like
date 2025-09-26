@@ -5,9 +5,59 @@ from datetime import date, datetime, timedelta
 import calendar
 from streamlit_calendar import calendar as st_calendar
 
+import style
+style.load_css()
+
+st.markdown("""
+<style>
+/* --- 共通: イベントカードをコンパクトに --- */
+.fc .fc-daygrid-event {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 4px 6px !important;
+}
+
+/* 3x3タイル（絵文字）用。改行を効かせて中央寄せ */
+.fc .fc-daygrid-event .fc-event-title {
+  white-space: pre;
+  text-align: center;
+  line-height: 1.05;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+               "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", monospace !important;
+  font-size: 16px;  /* デスクトップ標準 */
+}
+
+/* 今日のセルの軽いハイライト（任意） */
+.fc .fc-daygrid-day.fc-day-today { background: #fffbea !important; }
+
+/* --- モバイル幅向け（～640px）での最適化 --- */
+@media (max-width: 640px) {
+  /* カレンダーのイベントをさらに凝縮 */
+  .fc .fc-daygrid-event { padding: 2px 4px !important; }
+
+  /* タイルの文字を自動縮小（10～14pxの範囲で可変） */
+  .fc .fc-daygrid-event .fc-event-title {
+    font-size: clamp(10px, 3.2vw, 14px);
+    line-height: 1.0;
+    letter-spacing: 0; /* 絵文字のズレ防止 */
+  }
+
+  /* 日付番号の文字を少し小さく */
+  .fc .fc-daygrid-day-top .fc-daygrid-day-number { font-size: 12px; }
+
+  /* 1日セルの最低高さを少し確保（折返しで潰れにくく） */
+  .fc .fc-daygrid-day-frame { min-height: 72px; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ========================
 # ページ設定は最初に
+# ========================
 st.set_page_config(page_title="旧部室カレンダー", layout="wide")
 
+# ---------- サイドバー：ログイン状態 ----------
 with st.sidebar:
     user = st.session_state.get("user")
     role = st.session_state.get("role")
@@ -16,15 +66,18 @@ with st.sidebar:
         if st.button("ログアウト", key="logout_global"):
             st.session_state["user"] = None
             st.session_state["role"] = None
-            # ログアウト後はログインページへ（対応していない場合は rerun）
             try:
                 st.switch_page("pages/0_ログイン.py")
             except Exception:
                 st.rerun()
 
+# ---------- 定数 ----------
 ROOM_KEY = "old"  # new ページは "new" にする
 ROOM_LABEL = {"old": "旧部室", "new": "新部室"}
 SLOTS = ["朝","1限", "2限","昼休み", "3限", "4限", "5限","6限","夜"]
+NINE_SLOTS = ["朝","1限","2限","昼休み","3限","4限","5限","6限","夜"]
+
+# （参考）時間帯を使う箇所があれば利用
 SLOT_TIMES = {
     "朝": ("05:00:00", "08:50:00"),
     "1限": ("08:50:00", "10:20:00"),
@@ -37,7 +90,59 @@ SLOT_TIMES = {
     "夜": ("19:30:00", "22:00:00"),
 }
 
-# ---- helpers ----
+# ========================
+# スタイル（タイル用の最適化）
+# ========================
+st.markdown("""
+<style>
+/* ミニカード風＆中央寄せ */
+.fc .fc-daygrid-event {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  padding: 4px 6px !important;
+}
+
+/* タイトルに 3x3 の絵文字タイルをそのまま描く */
+.fc .fc-daygrid-event .fc-event-title {
+  white-space: pre;      /* \n を改行として表示 */
+  text-align: center;
+  line-height: 1.05;
+  font-size: 16px;       /* タイルを見やすく */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ========================
+# ヘルパー
+# ========================
+def build_emoji_grid_title(reserved: set[str]) -> str:
+    # 予約=🟥, 空き=🟩
+    filled, empty = "🟥", "🟩"
+    cells = [filled if s in reserved else empty for s in NINE_SLOTS]
+    count = sum(1 for s in reserved)
+    # 3x3 + 件数ラベル（例: 3/9）
+    grid = f"{cells[0]}{cells[1]}{cells[2]}\n{cells[3]}{cells[4]}{cells[5]}\n{cells[6]}{cells[7]}{cells[8]}"
+    return f"{grid}\n{count}/9"
+
+def fetch_day_slot_set(room: str, d: date) -> set[str]:
+    rows = rdb.get_reservations_between(room, ymd(d), ymd(d))
+    return {r["slot"] for r in rows if r.get("slot")}
+
+def card(slot, status, who=None, color="#ecfeff"):
+    st.markdown(f"""
+    <div style="border:1px solid #e5e7eb;
+                border-radius:12px;
+                padding:16px;
+                margin:6px;
+                text-align:center;
+                background:{color};">
+      <b style="font-size:16px;">{slot}</b><br>
+      <span style="font-size:14px;">{status}{'（'+who+'）' if who else ''}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
 def month_bounds(any_day: date):
     first = any_day.replace(day=1)
     last_day = calendar.monthrange(first.year, first.month)[1]
@@ -54,26 +159,26 @@ def fetch_day_summary(room: str, d: date):
     for r in rows:
         sl = r.get("slot")
         if sl in who_by_slot:
-            # name は表示名、owner は内部ユーザー名（必要なら r["owner"] も利用可）
             who_by_slot[sl] = r.get("name")
     count = sum(1 for v in who_by_slot.values() if v)
     return who_by_slot, count
 
-def mk_events(room_key: str, month_first: date, month_last: date):
-    rows = rdb.get_reservations_between(room_key, month_first.isoformat(), month_last.isoformat())
+def mk_summary_events(room_key: str, month_first: date, month_last: date):
     evs = []
-    color = "#f97316" if room_key == "old" else "#3b82f6"
-    for r in rows:
-        d = r["date"]; s = r["slot"]; who = r["name"]
-        t0, t1 = SLOT_TIMES.get(s, ("09:00:00","10:00:00"))
+    d = month_first
+    while d <= month_last:
+        reserved = fetch_day_slot_set(room_key, d)
+        title = build_emoji_grid_title(reserved)  # ← ここを差し替え
         evs.append({
-            "title": f"{s} {who}",
-            "start": f"{d}T{t0}",
-            "end":   f"{d}T{t1}",
-            "allDay": False,
-            "backgroundColor": color,
-            "borderColor": color
+            "title": title,                        # ← タイトルで描画
+            "start": f"{d.isoformat()}T00:00:00",
+            "end":   f"{d.isoformat()}T23:59:00",
+            "allDay": True,
+            "backgroundColor": "#ffffff",
+            "borderColor": "#94a3b8",
+            "textColor": "#0f172a",
         })
+        d += timedelta(days=1)
     return evs
 
 def _extract_clicked_date(ret: dict) -> date | None:
@@ -98,7 +203,9 @@ def _extract_clicked_date(ret: dict) -> date | None:
     except Exception:
         return None
 
-# ---- guard: 要ログイン ----
+# ========================
+# ガード：要ログイン
+# ========================
 if "user" not in st.session_state or not st.session_state["user"]:
     st.error("このページはログインが必要です。左の「ログイン」ページからログインしてください。")
     st.stop()
@@ -106,13 +213,14 @@ if "user" not in st.session_state or not st.session_state["user"]:
 current_user = st.session_state["user"]
 is_admin = (st.session_state.get("role") == "admin")
 
-st.title(f"📅 {ROOM_LABEL[ROOM_KEY]} 月ビュー")
+st.title(f"📅 {ROOM_LABEL[ROOM_KEY]} 月ビュー（9タイル表示）")
 rdb.init_db()
 
 today = date.today()
 PM_KEY = f"picked_month_{ROOM_KEY}"
 SD_KEY = f"selected_day_{ROOM_KEY}"
 
+# ---------- 月切り替え ----------
 with st.sidebar:
     if PM_KEY not in st.session_state:
         st.session_state[PM_KEY] = today.replace(day=1)
@@ -144,6 +252,9 @@ if SD_KEY not in st.session_state:
 month_first, month_last = month_bounds(st.session_state[PM_KEY])
 ym_key = st.session_state[PM_KEY].strftime("%Y%m")
 
+# ========================
+# カレンダーオプション（9タイル描画の本体）
+# ========================
 cal_opts = {
     "initialView": "dayGridMonth",
     "firstDay": 0,  # 日曜始まり
@@ -154,58 +265,69 @@ cal_opts = {
     "selectable": True,
 }
 
-events = mk_events(ROOM_KEY, month_first, month_last)
+# ========================
+# カレンダー表示
+# ========================
+events = mk_summary_events(ROOM_KEY, month_first, month_last)
 ret = st_calendar(events=events, options=cal_opts, key=f"cal_{ROOM_KEY}_{ym_key}")
+
+with st.expander("凡例"):
+    st.markdown("🟥 = 予約 / 🟩 = 空き")
+
+# クリックで日付選択
 clicked = _extract_clicked_date(ret)
 if clicked and clicked != st.session_state[SD_KEY]:
     st.session_state[SD_KEY] = clicked
     st.rerun()
 
+# 凡例
+with st.expander("凡例"):
+    st.markdown("""
+- <span style="display:inline-block;width:10px;height:10px;background:#fb7185;border:1px solid #cbd5e1;border-radius:2px;"></span> = 予約済  
+- <span style="display:inline-block;width:10px;height:10px;background:#22c55e;border:1px solid #cbd5e1;border-radius:2px;"></span> = 空き
+""", unsafe_allow_html=True)
+
+# ========================
+# 選択日の予約UI（従来どおり）
+# ========================
 sel_day = st.session_state[SD_KEY]
 st.subheader(f"🗓 {ROOM_LABEL[ROOM_KEY]}: {sel_day.strftime('%Y-%m-%d')} の予約")
 
+# ===== 選択した日の枠予約 =====
 who_by_slot, _ = fetch_day_summary(ROOM_KEY, sel_day)
-cols = st.columns(len(SLOTS))
-for i, s in enumerate(SLOTS):
-    with cols[i]:
-        who = who_by_slot[s]
 
-        def card(html_body, bg="#ffffff"):
-            st.markdown(
-                f"""
-                <div style="border:1px solid #e5e7eb; padding:10px; border-radius:10px; background:{bg}; text-align:center;">
-                  {html_body}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+# ★ 3列×3行に分ける（スマホでも見やすい）
+for row_start in range(0, len(SLOTS), 3):
+    row_slots = SLOTS[row_start:row_start+3]
+    cols = st.columns(len(row_slots))
+    for i, s in enumerate(row_slots):
+        with cols[i]:
+            who = who_by_slot[s]
+            base_key = f"{ROOM_KEY}|{ymd(sel_day)}|{s}"
 
-        base_key = f"{ROOM_KEY}|{ymd(sel_day)}|{s}"
-        if who:
-            # 予約済み：所有者 or 管理者のみキャンセル可
-            if st.button(f"{s} の予約をキャンセル", key=f"cancel_btn|{base_key}"):
-                ok, msg = rdb.cancel_slot_if_allowed(
-                    ROOM_KEY, ymd(sel_day), s,
-                    requester=current_user, is_admin=is_admin
-                )
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
-            card(f"<b>{s}</b><br>× 予約済（{who}）", bg="#f1f5f9")
-        else:
-            if st.button(f"{s} を予約", key=f"reserve_btn|{base_key}"):
-                if not display_name.strip():
-                    st.warning("表示名を入力してください。")
-                else:
-                    ok, msg = rdb.reserve_slot(
+            if who:
+                if st.button(f"{s} の予約をキャンセル", key=f"cancel_btn|{base_key}"):
+                    ok, msg = rdb.cancel_slot_if_allowed(
                         ROOM_KEY, ymd(sel_day), s,
-                        display_name.strip(), owner=current_user
+                        requester=current_user, is_admin=is_admin
                     )
-                    if ok:
-                        st.success(f"{ROOM_LABEL[ROOM_KEY]} {ymd(sel_day)} {s} の予約が完了しました。")
-                        st.rerun()
+                    if ok: st.success(msg); st.rerun()
+                    else:  st.error(msg)
+
+                # 予約済カード（薄い赤）
+                card(s, "× 予約済", who, color="#fee2e2")
+
+            else:
+                if st.button(f"{s} を予約", key=f"reserve_btn|{base_key}"):
+                    if not display_name.strip():
+                        st.warning("表示名を入力してください。")
                     else:
-                        st.error(msg)
-            card(f"<b>{s}</b><br>○ 空き", bg="#ecfeff")
+                        ok, msg = rdb.reserve_slot(
+                            ROOM_KEY, ymd(sel_day), s,
+                            display_name.strip(), owner=current_user
+                        )
+                        if ok: st.success(f"{ROOM_LABEL[ROOM_KEY]} {ymd(sel_day)} {s} の予約が完了しました。"); st.rerun()
+                        else:  st.error(msg)
+
+                # 空きカード（薄い緑）
+                card(s, "○ 空き", color="#dcfce7")
