@@ -12,10 +12,8 @@ st.markdown("""
 <style>
 /* --- 共通: イベントカードをコンパクトに --- */
 .fc .fc-daygrid-event {
-  background: #ffffff !important;
-  border: 1px solid #cbd5e1 !important;
   border-radius: 8px !important;
-  padding: 4px 6px !important;
+  padding: 2px 6px !important;
 }
 
 /* 3x3タイル（絵文字）用。改行を効かせて中央寄せ */
@@ -26,6 +24,14 @@ st.markdown("""
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
                "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji", monospace !important;
   font-size: 16px;  /* デスクトップ標準 */
+}
+
+/* タイトルの省略と折返しのバランス */
+.fc .fc-event-title {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 今日のセルの軽いハイライト（任意） */
@@ -163,24 +169,6 @@ def fetch_day_summary(room: str, d: date):
     count = sum(1 for v in who_by_slot.values() if v)
     return who_by_slot, count
 
-def mk_summary_events(room_key: str, month_first: date, month_last: date):
-    evs = []
-    d = month_first
-    while d <= month_last:
-        reserved = fetch_day_slot_set(room_key, d)
-        title = build_emoji_grid_title(reserved)  # ← ここを差し替え
-        evs.append({
-            "title": title,                        # ← タイトルで描画
-            "start": f"{d.isoformat()}T00:00:00",
-            "end":   f"{d.isoformat()}T23:59:00",
-            "allDay": True,
-            "backgroundColor": "#ffffff",
-            "borderColor": "#94a3b8",
-            "textColor": "#0f172a",
-        })
-        d += timedelta(days=1)
-    return evs
-
 def _extract_clicked_date(ret: dict) -> date | None:
     if not ret:
         return None
@@ -202,6 +190,36 @@ def _extract_clicked_date(ret: dict) -> date | None:
         return date.fromisoformat(raw[:10])
     except Exception:
         return None
+
+def _iso_dt(d: date, hhmmss: str) -> str:
+    return f"{d.isoformat()}T{hhmmss}"
+
+def mk_month_events_with_times(room_key: str, month_first: date, month_last: date):
+    evs = []
+    d = month_first
+    while d <= month_last:
+        who_by_slot, _ = fetch_day_summary(room_key, d)
+        for slot in NINE_SLOTS:
+            who = who_by_slot.get(slot)
+            if not who:
+                continue
+            start_t, end_t = SLOT_TIMES[slot]
+
+            # ★ここを修正：タイトルを「スロット名 名前」にする
+            title = f"{slot} {who}"
+
+            evs.append({
+                "title": title,
+                "start": f"{d.isoformat()}T{start_t}",
+                "end":   f"{d.isoformat()}T{end_t}",
+                "allDay": False,
+                "backgroundColor": "#fecaca",
+                "borderColor": "#f87171",
+                "textColor": "#7f1d1d",
+            })
+        d += timedelta(days=1)
+    return evs
+
 
 # ========================
 # ガード：要ログイン
@@ -257,28 +275,49 @@ ym_key = st.session_state[PM_KEY].strftime("%Y%m")
 # ========================
 cal_opts = {
     "initialView": "dayGridMonth",
-    "firstDay": 0,  # 日曜始まり
-    "headerToolbar": {"left": "today prev,next", "center": "title", "right": ""},
+    "firstDay": 0,
+    "headerToolbar": {
+        "left": "today prev,next",
+        "center": "title",
+        "right": "dayGridMonth,listMonth,timeGridDay"
+    },
     "height": 720,
     "locale": "ja",
     "dayMaxEventRows": True,
-    "selectable": True,
+    "moreLinkClick": "day",
+
+    # ✨ ビュー別に時刻表示を切替
+    "views": {
+        "dayGridMonth": { "displayEventTime": False },  # ← 月ビューは時刻を非表示（これで「1限 名前」だけ）
+        "listMonth":    { "displayEventTime": True  },
+        "timeGridDay":  {
+            "displayEventTime": True,
+            "slotMinTime": "05:00:00",
+            "slotMaxTime": "22:30:00",
+        },
+    },
+
+    # 月ビューで時刻を出さないので、全体の displayEventTime は設定不要（入れてもOKだが無視されがち）
+    # "displayEventTime": False,
+    "expandRows": True,
 }
+
 
 # ========================
 # カレンダー表示
 # ========================
-events = mk_summary_events(ROOM_KEY, month_first, month_last)
+events = mk_month_events_with_times(ROOM_KEY, month_first, month_last)
 ret = st_calendar(events=events, options=cal_opts, key=f"cal_{ROOM_KEY}_{ym_key}")
-
-with st.expander("凡例"):
-    st.markdown("🟥 = 予約 / 🟩 = 空き")
 
 # クリックで日付選択
 clicked = _extract_clicked_date(ret)
 if clicked and clicked != st.session_state[SD_KEY]:
     st.session_state[SD_KEY] = clicked
     st.rerun()
+
+# 凡例（任意）
+with st.expander("凡例"):
+    st.markdown("- 赤いラベル：予約済み（“+ ほかX件”を押すとその日の詳細に移動）")
 
 # 凡例
 with st.expander("凡例"):
