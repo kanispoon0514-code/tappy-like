@@ -3,8 +3,61 @@ from auth_db import init_user_db, create_user, verify_login, admin_exists
 
 import style
 style.load_css()
+st.markdown("""
+<style>
+/* ボタンを親指サイズに（最小高さ & 余白UP） */
+.stButton > button {
+  min-height: 48px;
+  padding: 12px 16px;
+  font-size: 16px;
+}
 
-st.set_page_config(page_title="ログイン", layout="centered")
+/* 入力欄も指で押しやすく */
+.stTextInput input, .stPasswordInput input, .stDateInput input {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* モバイル時はカラムを自動で縦積み（Streamlit列を強制幅100%） */
+@media (max-width: 640px) {
+  [data-testid="stHorizontalBlock"] > div, 
+  [data-testid="column"] { width: 100% !important; flex: 1 0 100% !important; }
+}
+
+/* 画面余白を少し広めにして誤タップ減らす */
+.block-container { padding-top: 0.75rem; padding-bottom: 2.5rem; }
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
+/* ボタンを親指サイズに（最小高さ & 余白UP） */
+.stButton > button {
+  min-height: 48px;
+  padding: 12px 16px;
+  font-size: 16px;
+}
+
+/* 入力欄も指で押しやすく */
+.stTextInput input, .stPasswordInput input, .stDateInput input {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* モバイル時はカラムを自動で縦積み（Streamlit列を強制幅100%） */
+@media (max-width: 640px) {
+  [data-testid="stHorizontalBlock"] > div, 
+  [data-testid="column"] { width: 100% !important; flex: 1 0 100% !important; }
+}
+
+/* 画面余白を少し広めにして誤タップ減らす */
+.block-container { padding-top: 0.75rem; padding-bottom: 2.5rem; }
+</style>
+""", unsafe_allow_html=True)
+
+
+st.set_page_config(page_title="ログイン", layout="centered", initial_sidebar_state="collapsed")
 st.title("🔐 ログイン")
 
 init_user_db()
@@ -16,7 +69,6 @@ st.session_state.setdefault("role", None)
 # 既にログイン済みなら案内ページへ誘導（自動 or リンク）
 if st.session_state["user"]:
     st.success(f"ログイン中：{st.session_state['user']}（{st.session_state['role']}）")
-    # 自動遷移（対応していない場合はリンクだけ表示）
     try:
         st.switch_page("pages/1_案内.py")
     except Exception:

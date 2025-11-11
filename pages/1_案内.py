@@ -3,7 +3,7 @@ import streamlit as st
 import style
 style.load_css()
 
-st.set_page_config(page_title="案内")
+st.set_page_config(page_title="案内", initial_sidebar_state="collapsed")
 
 with st.sidebar:
     user = st.session_state.get("user")

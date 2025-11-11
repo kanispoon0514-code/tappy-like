@@ -10,6 +10,33 @@ style.load_css()
 
 st.markdown("""
 <style>
+/* ボタンを親指サイズに（最小高さ & 余白UP） */
+.stButton > button {
+  min-height: 48px;
+  padding: 12px 16px;
+  font-size: 16px;
+}
+
+/* 入力欄も指で押しやすく */
+.stTextInput input, .stPasswordInput input, .stDateInput input {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* モバイル時はカラムを自動で縦積み（Streamlit列を強制幅100%） */
+@media (max-width: 640px) {
+  [data-testid="stHorizontalBlock"] > div, 
+  [data-testid="column"] { width: 100% !important; flex: 1 0 100% !important; }
+}
+
+/* 画面余白を少し広めにして誤タップ減らす */
+.block-container { padding-top: 0.75rem; padding-bottom: 2.5rem; }
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
 /* --- 共通: イベントカードをコンパクトに --- */
 .fc .fc-daygrid-event {
   border-radius: 8px !important;
@@ -61,7 +88,7 @@ st.markdown("""
 # ========================
 # ページ設定は最初に
 # ========================
-st.set_page_config(page_title="旧部室カレンダー", layout="wide")
+st.set_page_config(page_title="旧部室カレンダー", layout="wide", initial_sidebar_state="collapsed")
 
 # ---------- サイドバー：ログイン状態 ----------
 with st.sidebar:
@@ -314,17 +341,6 @@ clicked = _extract_clicked_date(ret)
 if clicked and clicked != st.session_state[SD_KEY]:
     st.session_state[SD_KEY] = clicked
     st.rerun()
-
-# 凡例（任意）
-with st.expander("凡例"):
-    st.markdown("- 赤いラベル：予約済み（“+ ほかX件”を押すとその日の詳細に移動）")
-
-# 凡例
-with st.expander("凡例"):
-    st.markdown("""
-- <span style="display:inline-block;width:10px;height:10px;background:#fb7185;border:1px solid #cbd5e1;border-radius:2px;"></span> = 予約済  
-- <span style="display:inline-block;width:10px;height:10px;background:#22c55e;border:1px solid #cbd5e1;border-radius:2px;"></span> = 空き
-""", unsafe_allow_html=True)
 
 # ========================
 # 選択日の予約UI（従来どおり）
